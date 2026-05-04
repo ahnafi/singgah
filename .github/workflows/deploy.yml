@@ -1,0 +1,129 @@
+name: Build & Deploy (ARM64)
+
+on:
+  push:
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # GHCR image name must be lowercase
+      - name: Set Image Name
+        run: |
+          echo "IMAGE_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login ke GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
+
+      - name: Deploy ke STB
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            # Setup folder
+            mkdir -p /opt/apps/singgah
+            cd /opt/apps/singgah
+
+            # Definisikan variabel lokal untuk shell ini
+            export DOCKER_IMAGE=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            export SUMOPOD_API_KEY="${{ secrets.SUMOPOD_API_KEY }}"
+
+            # Buat file .env
+            echo "${{ secrets.ENV_FILE }}" > .env
+            echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> .env
+            echo "SUMOPOD_API_KEY=$SUMOPOD_API_KEY" >> .env
+
+            # Buat docker-compose.yaml
+            cat << 'EOF' > docker-compose.yaml
+            services:
+              app:
+                image: ghcr.io/${DOCKER_IMAGE}:latest
+                container_name: singgah-app
+                restart: unless-stopped
+                ports:
+                  - "8003:80"
+                extra_hosts:
+                  - "host.docker.internal:host-gateway"
+                env_file: .env
+                environment:
+                  - TRUSTED_PROXIES="*"
+                  - SUMOPOD_API_KEY=${SUMOPOD_API_KEY}
+                  - APP_PORT=8003
+                volumes:
+                  - storage:/var/www/html/storage
+                networks:
+                  - app-network
+                deploy:
+                  resources:
+                    limits:
+                      memory: 180m
+
+            networks:
+              app-network:
+                external: true
+
+            volumes:
+              storage:
+            EOF
+
+            # Pastikan network eksternal tersedia
+            docker network create app-network || true
+
+            # Pull image baru dengan variabel yang sudah di-export
+            docker compose pull
+
+            # Restart container
+            docker compose up -d --remove-orphans
+
+            # Jalankan migrasi
+            docker exec singgah-app php artisan migrate --force
+
+            # Bersihkan image lama
+            docker image prune -f
+
+            echo "✅ Deploy selesai ke port 8003: $(date)"

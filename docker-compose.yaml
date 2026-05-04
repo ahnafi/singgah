@@ -1,0 +1,27 @@
+services:
+    app:
+        image: ghcr.io/${DOCKER_IMAGE}:latest
+        container_name: singgah-app
+        restart: unless-stopped
+        ports:
+            - '8003:80'
+        env_file: .env
+        environment:
+            - TRUSTED_PROXIES=*
+            - SUMOPOD_API_KEY=${SUMOPOD_API_KEY}
+            - APP_PORT=8003
+        volumes:
+            - storage:/var/www/html/storage
+        networks:
+            - app-network
+        deploy:
+            resources:
+                limits:
+                    memory: 180m
+
+networks:
+    app-network:
+        external: true
+
+volumes:
+    storage:
