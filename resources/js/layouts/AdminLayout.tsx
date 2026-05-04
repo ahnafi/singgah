@@ -113,6 +113,10 @@ export default function AdminLayout({ children, title }: Props) {
     const [collapsed, setCollapsed] = useState(false);
     const currentPath =
         typeof window !== 'undefined' ? window.location.pathname : '/admin';
+    const isOnSettings =
+        typeof window !== 'undefined'
+            ? window.location.pathname.startsWith('/settings')
+            : false;
 
     useEffect(() => {
         if (flash?.success) toast.success(flash.success);
@@ -197,7 +201,7 @@ export default function AdminLayout({ children, title }: Props) {
             <div className="space-y-0.5 border-t border-gray-100 p-3">
                 <Link
                     href="/settings/profile"
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 transition-all hover:bg-gray-100 ${collapsed ? 'justify-center' : ''}`}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-gray-100 ${collapsed ? 'justify-center' : ''} ${isOnSettings ? 'bg-red-50 text-red-700' : 'text-gray-600'}`}
                     title={collapsed ? 'Pengaturan' : undefined}
                 >
                     <Settings

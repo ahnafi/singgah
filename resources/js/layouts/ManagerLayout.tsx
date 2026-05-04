@@ -142,6 +142,10 @@ export default function ManagerLayout({ children, title, village }: Props) {
     const [collapsed, setCollapsed] = useState(false);
     const currentPath =
         typeof window !== 'undefined' ? window.location.pathname : '/manager';
+    const isOnSettings =
+        typeof window !== 'undefined'
+            ? window.location.pathname.startsWith('/settings')
+            : false;
 
     // Show toast on flash messages
     useEffect(() => {
@@ -240,7 +244,7 @@ export default function ManagerLayout({ children, title, village }: Props) {
             <div className={`space-y-0.5 border-t border-gray-100 p-3`}>
                 <Link
                     href="/settings/profile"
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 transition-all hover:bg-gray-100 ${collapsed ? 'justify-center' : ''}`}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-gray-100 ${collapsed ? 'justify-center' : ''} ${isOnSettings ? 'bg-[var(--singgah-green-50)] text-[var(--singgah-green-700)]' : 'text-gray-600'}`}
                     title={collapsed ? 'Pengaturan' : undefined}
                 >
                     <Settings
